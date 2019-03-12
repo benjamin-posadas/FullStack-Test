@@ -1,6 +1,7 @@
 # Prueba: FullStack (Dashboard)
-# Implementación del dashboard
-# Aplicación básica de monitoreo del tipo de cambio BTC_MXN
+
+Implementación del dashboard
+Aplicación básica de monitoreo del tipo de cambio BTC_MXN
 
 Deje parte de las lineas de default ya que como lo indican, este es un proyecto desarrollado en Vue.js
 
