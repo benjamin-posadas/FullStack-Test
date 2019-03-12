@@ -1,4 +1,4 @@
-# Prueba: FullStack
+# Prueba: FullStack (Dashboard)
 # Implementación del dashboard
 
 Deje parte de las lineas de default ya que como lo indican, este es un proyecto desarrollado en Vue.js
