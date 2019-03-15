@@ -33,20 +33,32 @@
 				bitcoinData: [],
 				sel: 'inter1',
 				inicioIntervalo: false,
+				actualInterval: 1,
 				timesBarData : [
-					{name: 'inter1',interval: 3600,text: '1 HR'},
-					{name: 'inter2',interval: 21600,text: '6 HRS'},
-					{name: 'inter3',interval: 43200,text: '12 HRS'},
-					{name: 'inter4',interval: 86400,text: '24 HRS'}
+					{name: 'inter1',interval: 1,text: '1 HR'},
+					{name: 'inter2',interval: 6,text: '6 HRS'},
+					{name: 'inter3',interval: 12,text: '12 HRS'},
+					{name: 'inter4',interval: 24,text: '24 HRS'}
 				],
+				canvasRef: null,
 				provider: {
 					context: null
 				}
 			}
 		},
 		methods:{
-			drawGraphic(){
-				const c = this.$refs['canvas'];
+			drawGraphic(interval){
+				if(this.bitcoinData.length <= 0) return;
+				var datos24 = this.bitcoinData;
+				var datos = [];
+				if(interval == 24){
+					datos = datos24;
+				}else{
+					let lastIntervalDate = datos24[datos24.length - 1].created_at - 3600000 * interval;
+					datos = datos24.filter( item => item.created_at > lastIntervalDate);
+				}
+
+				const c = this.canvasRef;
 			    const ctx = c.getContext('2d');
 
 			    ctx.canvas.width  = window.innerWidth;
@@ -58,9 +70,6 @@
 
 		  		ctx.canvas.style.width = window.innerWidth;
 		  		ctx.canvas.style.height = window.innerHeight;
-			    
-			    var datos = this.bitcoinData;
-
 
 				ctx.clearRect(0, 0,  ctx.canvas.width, ctx.canvas.height);
 
@@ -82,19 +91,26 @@
 				var maxValue = Math.max(...datos.map(function(item){return parseFloat(item.last);}));
 				var minValue = Math.min(...datos.map(function(item){return parseFloat(item.last);}));
 
+				var segmento = ctx.canvas.height/4;
 
+				var margin = segmento * .15;
+				var sizeAvailableX = segmento - margin * 2;
+				var sizeAvailableY = ctx.canvas.width / 2;
+				if(window.innerWidth <  window.innerHeight)
+					var fontSize = sizeAvailableX / 3;
+				else
+					var fontSize = sizeAvailableX / 4;
+
+
+				ctx.fillStyle = '#05B17B';
+				ctx.font = fontSize+'px Arial';
+				ctx.fillText('Ultimo précio',30,fontSize + margin);
+				ctx.fillText('Máximo',sizeAvailableY,fontSize + margin);
 				ctx.fillStyle = '#6C757D';
-				if(window.innerWidth >  window.innerHeight){
-					ctx.font = '72px Arial';
-					ctx.fillText('$'+maxValue+' MXN', 80, 100);
-				}
-				else{
-					ctx.font = '32px Arial';
-					ctx.fillText('$'+maxValue+' MXN', 30, 50);
-				}
+				ctx.fillText('$'+maxValue+' MXN', 40, margin + fontSize * 2);
+				ctx.fillText('$'+datos[datos.length - 1].last+' MXN',sizeAvailableY+10, margin + fontSize * 2);
 
 				var diferencia = maxValue - minValue;
-				var segmento = ctx.canvas.height/4;
 				var minY = segmento;
 				var maxY = ctx.canvas.height - segmento;
 				var promedio = segmento/(maxY - minY); 
@@ -160,7 +176,7 @@
 					ctx.lineWidth = 3;
 
 				    if(!indInfY && datos[i].last == minValue){
-				    	ctx.fillText('$'+datos[i].last, 0, posy-10);
+				    	ctx.fillText('$'+datos[i].last, 0, posy+15);
 				    	ctx.beginPath();
 				        ctx.moveTo(0, posy);
 				        ctx.lineTo(25, posy);
@@ -176,12 +192,21 @@
 			},
 			changeInterval(name,interval){
 				this.sel = name;
-				//axios.get('http://localhost:3000/api/getIntervalData/'+interval)
-				axios.get('http://ec2-3-17-207-194.us-east-2.compute.amazonaws.com:8080/api/getIntervalData/'+interval)
-				.then(response =>{
-					this.bitcoinData = response.data;
-					this.drawGraphic();
-				});
+				this.actualInterval = interval;
+				this.drawGraphic(interval);
+			},
+			debounce(callback, wait, inmediate = false){
+				let timeout = null;
+
+				return function(){
+					const callNow = inmediate && !timeout;
+					const next = () => callback.apply(this, arguments);
+					clearTimeout(timeout);
+					timeout = setTimeout(next, wait);
+					if(callNow){
+						next();
+					}
+				}
 			}
 		},
 		provide(){
@@ -190,19 +215,28 @@
 			}
 		},
 		mounted(){
+			this.canvasRef = this.$refs['canvas'];
+
+			const handleResize = this.debounce(() =>{
+				this.drawGraphic(this.actualInterval);
+			},300,true);
+
 			window.addEventListener('resize', () => {
 				var userAgent = navigator.userAgent || navigator.vendor || window.opera;
 				var isMobile = navigator.userAgent.match(/(iPad)|(iPhone)|(iPod)|(android)|(webOS)/i);
-				if(!isMobile)
-		  			this.drawGraphic();
+				if(!isMobile){
+		  			handleResize();
+				}
 			});
+
 		},
 		created(){
 			//axios.get('http://localhost:3000/api/getIntervalData/3600')
-			axios.get('http://ec2-3-17-207-194.us-east-2.compute.amazonaws.com:8080/api/getIntervalData/3600')
+			var intervalConverted = 24 * 3600;
+			axios.get('http://ec2-3-17-207-194.us-east-2.compute.amazonaws.com:8080/api/getIntervalData/'+intervalConverted)
 			.then(response =>{
 				this.bitcoinData = response.data;
-				this.drawGraphic();
+				this.drawGraphic(1);
 			});
 
 			if(!this.inicioIntervalo){
@@ -212,13 +246,9 @@
 						axios.get('http://ec2-3-17-207-194.us-east-2.compute.amazonaws.com:8080/api/getLastData/'+this.bitcoinData[this.bitcoinData.length-1].created_at)
 						.then(response =>{
 							var newElem = response.data.length;
-							/*console.log(response.data);
-							console.log('Elementos: '+newElem);
-							console.log('En el registro de datos: '+this.bitcoinData.length);*/
 							for(let i=0; i<newElem; i++) this.bitcoinData.shift();
 							this.bitcoinData = this.bitcoinData.concat(response.data);
-							//console.log('En el registro de datos despues: '+this.bitcoinData.length);
-							this.drawGraphic();
+							this.drawGraphic(this.actualInterval);
 						});
 					}
 				},10000);
